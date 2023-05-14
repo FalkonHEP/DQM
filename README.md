@@ -9,4 +9,6 @@ Setup parameters and hyperparameters in main.py
 
 Execute main.py
 
+Plot reference against data with plots.ipynb
+
 Code is not final.
