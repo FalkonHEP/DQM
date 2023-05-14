@@ -14,6 +14,48 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager
 
 from scipy.spatial.distance import pdist
+from scipy.stats import kstest, chi2, norm
+
+
+
+def return_best_chi2dof(tobs):
+    """
+    Returns the most fitting value for dof assuming tobs follows a chi2_dof distribution,
+    computed with a kolmogorov-smirnov test.
+    Parameters
+    ----------
+    tobs : np.ndarray
+        observations
+    Returns
+    -------
+        best : float
+            best dof
+    """
+    
+    
+    dof_range = np.arange(np.mean(tobs) - 10, np.mean(tobs) + 10, 0.1)
+    
+    ks_tests = []
+    
+    for dof in dof_range:
+        
+        test = kstest(tobs, lambda x:chi2.cdf(x, df=dof))[0]
+        
+        ks_tests.append((dof, test))
+        
+    ks_tests = [test for test in ks_tests if test[1] != 'nan'] # remove nans
+    
+    ks_tests = [test for test in ks_tests if test[0] >= 0] # retain only positive dof
+        
+    best = min(ks_tests, key = lambda t: t[1]) # select best dof according to KS test result
+        
+    return round(best[0],2)
+
+
+def chi2_zscore(t1, dof):
+    #p = chi2.cdf(float('inf'),dof)-chi2.cdf(t1,dof)
+    p = chi2.sf(t1,dof)
+    return norm.ppf(1 - p)
 
 
 
@@ -156,8 +198,6 @@ def run_toys(reference, data, key, filename, N0, N1, flk_config, n_toys=10, std=
 
     for i in toys:
 
-        st_time = time.time()
-
         print("[--] Toy {}: ".format(i))
         # build training set
         # initialize dataset
@@ -193,14 +233,16 @@ def run_toys(reference, data, key, filename, N0, N1, flk_config, n_toys=10, std=
         flk_config['seed']=i #seed for center selection, different for every toy
         model = LogisticFalkon(**flk_config)
 
+
+        st_time = time.time()
         model.fit(Xtorch, Ytorch)
+        dt = round(time.time()-st_time,2)
+
         preds = model.predict(Xtorch).numpy()
 
         t = compute_t(preds,Y)
         
-        dt = round(time.time()-st_time,2)
-
-        print("t = {}\nTime = {} sec\n\t".format(t,dt))
+        print("t = {}\n Training time = {} sec\n\t".format(t,dt))
 
         with open(filename, 'a') as f:
             f.write('{},{},{}\n'.format(i,t,dt))
