@@ -11,4 +11,6 @@ Execute main.py
 
 Plot reference against data with plots.ipynb
 
+Example notebook to run single examperiment example.ipynb
+
 Code is not final.
