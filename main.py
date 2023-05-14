@@ -2,7 +2,7 @@ import numpy as np
 import os
 
 
-from utils import get_logflk_config, read_data, run_toys_2, standardize
+from utils import get_logflk_config, read_data, run_toys, standardize, get_data_path
 from datetime import datetime
 
 
@@ -11,29 +11,24 @@ from datetime import datetime
 
 features = ['t_1','t_2','t_3','t_4','theta'] #,'n_hits']
 
-N0=5000
+N0=2000
 N1=500
 weight=N1/N0
 
+n_ref_toys = 5
+n_data_toys = 5
 
-reference_path = "/data/marcol/DQM/6D/reference/RUN000085_events.csv"
-data_paths = {
-                "Thr 75%": "/data/marcol/DQM/6D/thresholds/thresholds_75/RUN000086_events.csv",
-                "Thr 25%": "/data/marcol/DQM/6D/thresholds/thresholds_25/RUN000088_events.csv",
-                "Thr 50%": "/data/marcol/DQM/6D/thresholds/thresholds_50/RUN000087_events.csv",
-                "Ca 25%": "/data/marcol/DQM/6D/cathods/cathods_25/RUN000091_events.csv",
-                "Ca 50%": "/data/marcol/DQM/6D/cathods/cathods_50/RUN000090_events.csv",
-                "Ca 75%": "/data/marcol/DQM/6D/cathods/cathods_75/RUN000089_events.csv",
-            }
+data_keys = ["Thr 75%","Thr 50%","Thr 25%","Ca 75%","Ca 50%","Ca 25%"]
+reference_path = get_data_path("Ref")
 
-output_dir="./runs/"+datetime.now().strftime("%d%M%Y_%H%m%S")+f"/{len(features)}D_{N0}_{N1}/ref"
+output_dir="./runs/"+datetime.now().strftime("%d%M%Y_%H%m%S")+f"/{len(features)}D_{N0}_{N1}"
 
 rng = np.random.default_rng(1)
 
 reference = read_data(reference_path,features=features,rnd=rng)
 
-M = 1000
-lam = 1e-8
+M = 2000
+lam = 1e-7
 #flk_sigma = candidate_sigma(standardize(reference[:20000,:])) # used to tune sigma on a (small) reference sample
 flk_sigma = 4.5
 
@@ -41,11 +36,10 @@ print("[--] FALKON SIGMA: {}".format(flk_sigma))
 
 flk_config = get_logflk_config(M,flk_sigma,[lam],weight=weight,iter=[1000],seed=None,cpu=False) # seed is re-set inside learn_t function
 
-run_toys_2(reference, reference, "Ref", output_dir+"/t_ref.txt", N0, N1, rng,  flk_config, n_toys=5, std='scaler', p=None, replacement=True, plt_freq=5, plot_dir=output_dir+"/plot_ref")
+run_toys(reference, reference, "Ref", output_dir+"/Ref/t.txt", N0, N1, rng,  flk_config, n_toys=n_ref_toys, std='scaler', p=None, replacement=True, plt_freq=5, plot_dir=output_dir+"/Ref/plot_ref")
 
 
-for key,value in data_paths.items():
+for key in data_keys:
     print("[--] DATA: "+key)
-    data = read_data(value,features=features,rnd=rng)
-    new_output_dir=os.path.dirname(output_dir)+"/"+key
-    run_toys_2(reference, data, key, new_output_dir+"/t_data.txt", N0, N1, rng,  flk_config, n_toys=5, std='scaler', p=None, replacement=False, plt_freq=2, plot_dir=new_output_dir+"/plot_data")
+    data = read_data(get_data_path(key),features=features,rnd=rng)
+    run_toys(reference, data, key, output_dir+"/"+key+"/t.txt", N0, N1, rng,  flk_config, n_toys=n_data_toys, std='scaler', p=None, replacement=False, plt_freq=2, plot_dir=output_dir+"/"+key+"/plot_data")
