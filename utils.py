@@ -53,13 +53,28 @@ def return_best_chi2dof(tobs):
 
 
 def chi2_zscore(t1, dof):
-    #p = chi2.cdf(float('inf'),dof)-chi2.cdf(t1,dof)
+    # compute a Z score with a chi2 null distribution
     p = chi2.sf(t1,dof)
     return norm.ppf(1 - p)
+
+def emp_zscore(t0,t1):
+    # compute the empirical Z score 
+    # a lower bound is returned if max(t0)<min(t1)
+    t0 = np.array(t0)
+    t1 = np.array(t1)
+    if max(t0) <= min(t1):
+        p_obs = 1 / len(t0)
+        Z_obs = norm.ppf(1 - p_obs),2
+        return Z_obs
+    else:
+        p_obs = [np.count_nonzero(t0 >= t) / len(t0) for t in t1]
+        return [norm.ppf(1 - p) for p in p_obs]
 
 
 
 def candidate_sigma(data, perc=90):
+    # return a candidate guassian width for falkon as the 90th parcentile of the pariwise distance
+    # should be used with reference data only
 
     pairw = pdist(data)
 
@@ -76,14 +91,14 @@ def get_logflk_config(M,flk_sigma,lam,weight,iter=[1000],seed=None,cpu=False):
             'iter_list' : iter, #list of number of CG iterations,
             'options' : FalkonOptions(cg_tolerance=np.sqrt(1e-7), keops_active='no', use_cpu=cpu, debug = False),
             'seed' : seed, # (int or None), the model seed (used for Nystrom center selection) is manually set,
-            'loss' : WeightedCrossEntropyLoss(kernel=GaussianKernel(sigma=flk_sigma), neg_weight=weight),
+            'loss' : WeightedCrossEntropyLoss(kernel=GaussianKernel(sigma=flk_sigma), neg_weight=weight), # loss
             }
 
 
 
 
 def learn_t(Xtorch,Ytorch,model):
-    
+    # train and compute the test statistics 
     model.fit(Xtorch, Ytorch)
     preds = model.predict(Xtorch)
     
@@ -91,7 +106,7 @@ def learn_t(Xtorch,Ytorch,model):
 
 
 def compute_t(predictions,labels):
-    
+    # compute the test statistics with model predictions and labels
     t = 2 * np.sum(predictions[labels.flatten()==1])
     
     return t
@@ -106,7 +121,7 @@ def read_data(file,features,rnd=None):
 
 
 def higgs_standardize(X):
-
+    # data standardization following Baldi et al
     Xnorm = X.copy()
 
     for j in range(Xnorm.shape[1]):
@@ -126,6 +141,7 @@ def higgs_standardize(X):
     return Xnorm
 
 def standardize(X):
+    # standard scaler
 
     Xnorm = X.copy()
 
@@ -156,8 +172,39 @@ def get_data_path(name):
 
 
 
-def run_toys(reference, data, key, filename, N0, N1, flk_config, n_toys=10, std=True, p=1, replacement=False, plt_freq=0, plot_dir=None):
+def run_toys(reference, data, key, filename, N0, N1, flk_config, n_toys=10, std='scaler', p=1, replacement=False, plt_freq=0, plot_dir=None):
+    """
+    Run experiments.
 
+    Parameters
+    ----------
+    reference : np.ndarray
+        reference data
+    data : np.ndarray
+        data
+    key : list of strings
+        list of keys identifying the type of data. Ex: ["Ref"] or ["Thr 75%", "Thr 50%"]
+    filename: string
+        path to output file
+    N0 : int
+        Size of reference sample
+    N1 : int
+        Size of toy sample
+    flk_config : dict
+        Logfalkon hyperparameters
+    n_toys : int
+        Number of toys (pseudoexperiments)
+    std : string
+        'scaler' for standard scaler, 'higgs' for higgs normalization (Baldi et al)
+    p : float betnween 0 and 1
+        How to mix background and anomalous data in toy (if 1 toys are fully anomalous)
+    replacement : boolean
+        Whether to sample from reference and data with replacement (if False toys are fully independent)
+    plt_freq : int
+        How often to plot reconstructions (Ex, 2 is every other toy)
+    plot_dir : string
+        Path to generated plots
+    """
 
     colors = {
                 "Ref": 'black',
@@ -248,6 +295,7 @@ def run_toys(reference, data, key, filename, N0, N1, flk_config, n_toys=10, std=
             f.write('{},{},{}\n'.format(i,t,dt))
         
         if plt_freq!=0 and i in toys[::plt_freq]:
+            print("Plotting reconstructions...")
             for j in range(X.shape[1]):
                 if j in range(4): 
                     plot_reco(X[Y.flatten()==0][:,j],X[Y.flatten()==1][:,j],preds[Y.flatten()==0],ref_weight=1/len(X[Y.flatten()==0][:,j]),data_weight=1/len(X[Y.flatten()==1][:,j]),
@@ -259,6 +307,7 @@ def run_toys(reference, data, key, filename, N0, N1, flk_config, n_toys=10, std=
                     plot_reco(X[Y.flatten()==0][:,j],X[Y.flatten()==1][:,j],preds[Y.flatten()==0],ref_weight=1/len(X[Y.flatten()==0][:,j]),data_weight=1/len(X[Y.flatten()==1][:,j]),
                               xlabel=r"$n_{hits}$",color=colors[key],labels=('Reference',key),save_path=plot_dir+str(i)+'/in_reco_'+str(j)+'.pdf')
                     
+
 
 def plot_reco(ref,data,ref_preds,ref_weight=1,data_weight=1,title=None,xlabel=r"$t^{(1)}_{drift}$ (ns)", text=None, labels=('Reference','Data'),color='black', save_path=None):
 
